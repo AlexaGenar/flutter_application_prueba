@@ -1,234 +1,158 @@
-import 'package:english_words/english_words.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-void main() {
-  runApp(MyApp());
+// Nombre de la caja (box) donde guardaremos el contador
+const String COUNTER_BOX = 'counter_box';
+const String COUNTER_KEY = 'counter_value';
+
+void main() async {
+  // Inicializar Flutter
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Inicializar Hive y abrir el box
+  await Hive.initFlutter();
+  await Hive.openBox(COUNTER_BOX);
+  
+  // Leer el valor guardado
+  final box = Hive.box(COUNTER_BOX);
+  final savedCounter = box.get(COUNTER_KEY, defaultValue: 0);
+  print('Valor inicial leído: $savedCounter'); // Debug
+  
+  runApp(MyApp(initialCounter: savedCounter));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final int initialCounter;
+  
+  const MyApp({Key? key, required this.initialCounter}) : super(key: key);
 
-  //_ barra baja clase privada
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => MyAppState(),
-      child: MaterialApp(
-        title: 'Examen',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.purple), //color  text
+    return MaterialApp(
+      title: 'Contador Examen',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: CounterPage(initialCounter: initialCounter),
+    );
+  }
+}
+
+class CounterPage extends StatefulWidget {
+  final int initialCounter;
+  
+  const CounterPage({Key? key, required this.initialCounter}) : super(key: key);
+
+  @override
+  State<CounterPage> createState() => _CounterPageState();
+}
+
+class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
+  late int _counter;
+  late Box _box;
+  bool _isLoading = true;
+  
+  @override
+  void initState() {
+    super.initState();
+    _counter = widget.initialCounter;
+    _initBox();
+    
+    // Registrar el observador para detectar cambios en el ciclo de vida
+    WidgetsBinding.instance.addObserver(this);
+  }
+  
+  @override
+  void dispose() {
+    // Guardar el valor actual antes de destruir el widget
+    _saveCounter(_counter);
+    // Eliminar el observador
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  
+  // Este método se llama cuando cambia el estado del ciclo de vida de la aplicación
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Guardar el estado cuando la aplicación pasa a segundo plano o se inactiva
+    if (state == AppLifecycleState.paused || 
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _saveCounter(_counter);
+    }
+  }
+  
+  Future<void> _initBox() async {
+    _box = Hive.box(COUNTER_BOX);
+    setState(() {
+      _isLoading = false;
+    });
+  }
+  
+  void _saveCounter(int value) {
+    _box.put(COUNTER_KEY, value);
+    print('Valor guardado: $value'); // Debug
+  }
+  
+  void _updateCounter(int value) {
+    setState(() {
+      _counter = value;
+    });
+    _saveCounter(_counter);
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
         ),
-        home: MyHomePage(),
-      ),
-    );
-  }
-}
-
-class MyAppState extends ChangeNotifier {
-  var current = WordPair.random();
- 
-  void getNext() {
-    current = WordPair.random();
-    notifyListeners();
-  }
-
-  var favorites = <WordPair>[];// funcion boton me gusta
-
-  void toggleFavorite() {
-    if (favorites.contains(current)) {
-      favorites.remove(current);
-    } else {
-      favorites.add(current);
-    }
-    notifyListeners();
-  }
-   void deletedFavorite(WordPair pair){ //Agregar metodo eliminar 
-      favorites.remove(pair);
-      notifyListeners();
-    }
-}
-
-// Agregamos dos pagina y riel de navegacion 
-
-class MyHomePage extends StatefulWidget {
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-var selectedIndex = 0;
-
-@override
-Widget build(BuildContext context) {
-Widget page;  // asigna una pantalla a page
-switch (selectedIndex) {
-  case 0:
-    page = GeneratorPage();
-    break;
-  case 1:
-    page = FavoritesPage();   //cambiarlo por favorite
-    break;
-  default:
-    throw UnimplementedError('no widget for $selectedIndex');
-}
-
-    return LayoutBuilder(   //El usuario cambia el tamaño de la ventana de la app.
-      builder: (context, constraints) {
-        return Scaffold(
-          body: Row(
-            children: [
-              SafeArea(
-                child: NavigationRail(  //riel de navegacion
-                  extended: constraints.maxWidth >= 600,     //extended: constraints.maxWidth >= 600 hace que sea responsive
-                    //quitar o poner etiquetas de los extends= true pone etiqueta, label: Text('Home'),
-                  destinations: [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.home),
-                      label: Text('Home'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.favorite),
-                      label: Text('Favorites'),
-                    ),
-                  ],
-                  selectedIndex: selectedIndex,
-                  onDestinationSelected: (value) {
-                    setState(() {
-                      selectedIndex = value;
-                    });
-                    
-                  },
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  child: page,
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-    );
-}
-}
-
-
-class GeneratorPage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    var pair = appState.current;
-
-    IconData icon;
-    if (appState.favorites.contains(pair)) {
-      icon = Icons.favorite;
-    } else {
-      icon = Icons.favorite_border;
-    }
-
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center, //Espacio entre los objetos 
-        children: [
-          BigCard(pair: pair),
-          SizedBox(height: 10),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ElevatedButton.icon(
-                onPressed: () {
-                  appState.toggleFavorite();
-                },
-                icon: Icon(icon),
-                label: Text('Like'),
-              ),
-              SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () {
-                  appState.getNext();
-                },
-                child: Text('Next'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ...
-
-class BigCard extends StatelessWidget {
-  const BigCard({
-    super.key,
-    required this.pair,
-  });
-
-  final WordPair pair;
-
-  @override
-  Widget build(BuildContext context) {
-     final theme = Theme.of(context); 
-
-     final style = theme.textTheme.displayMedium!.copyWith( //style
-      color: theme.colorScheme.onPrimary,
-    );
-
-
-    return Card(
-      color: theme.colorScheme.primary,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-       child: Text(
-          pair.asLowerCase,
-          style: style,
-          semanticsLabel: "${pair.first} ${pair.second}",
-       ),
-      ),
-    );
-  }
-}
-// ...
-
-class FavoritesPage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-
-    if (appState.favorites.isEmpty) {
-      return Center(
-        child: Text('No favorites yet.'),
       );
     }
-
-    return ListView(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: Text('You have '
-              '${appState.favorites.length} favorites:'),
-        ),
-        for (var pair in appState.favorites)
-          ListTile(
-            leading: Icon(Icons.favorite),
-            title: Text(pair.asLowerCase),
-            trailing: IconButton(          ///Añadi boton de eliminar
-              icon: Icon (Icons.delete),
-            onPressed: (){
-              appState.deletedFavorite(pair);
-              }
+    
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Contador'),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const Text(
+              'Valor actual del contador:',
+              style: TextStyle(fontSize: 18),
             ),
-          ),
-      ],
+            Text(
+              '$_counter',
+              style: const TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 30),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: () => _updateCounter(_counter - 1),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: const EdgeInsets.all(15),
+                  ),
+                  child: const Icon(Icons.remove),
+                ),
+                const SizedBox(width: 20),
+                ElevatedButton(
+                  onPressed: () => _updateCounter(_counter + 1),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.all(15),
+                  ),
+                  child: const Icon(Icons.add),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
-
- 
 }
-
-
-

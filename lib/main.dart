@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => MyAppState(),
       child: MaterialApp(
-        title: 'Namer App',
+        title: 'Examen',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.purple), //color  text
         ),
@@ -43,6 +43,10 @@ class MyAppState extends ChangeNotifier {
     }
     notifyListeners();
   }
+   void deletedFavorite(WordPair pair){ //Agregar metodo eliminar 
+      favorites.remove(pair);
+      notifyListeners();
+    }
 }
 
 // Agregamos dos pagina y riel de navegacion 
@@ -212,10 +216,18 @@ class FavoritesPage extends StatelessWidget {
           ListTile(
             leading: Icon(Icons.favorite),
             title: Text(pair.asLowerCase),
+            trailing: IconButton(          ///Añadi boton de eliminar
+              icon: Icon (Icons.delete),
+            onPressed: (){
+              appState.deletedFavorite(pair);
+              }
+            ),
           ),
       ],
     );
   }
+
+ 
 }
 
 
